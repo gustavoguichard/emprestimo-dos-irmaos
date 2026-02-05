@@ -75,7 +75,7 @@ export function PinScreen({ onSuccess, onValidate }: PinScreenProps) {
       <input
         ref={inputRef}
         type="text"
-        inputMode="numeric"
+        inputMode="none"
         pattern="[0-9]*"
         autoComplete="one-time-code"
         value={pin}
