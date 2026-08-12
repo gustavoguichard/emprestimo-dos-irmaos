@@ -25,7 +25,7 @@ export async function loader({}: Route.LoaderArgs) {
     .order("installment_number", { ascending: true });
 
   if (error) {
-    throw new Error("Erro ao carregar pagamentos");
+    throw new Error(`Erro ao carregar pagamentos: ${error.message}`);
   }
 
   return { payments: payments as Payment[] };

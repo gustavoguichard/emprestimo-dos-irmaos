@@ -5,8 +5,6 @@ type LoanSummaryProps = {
   totalCount: number;
 };
 
-const PRINCIPAL = 5000;
-const INTEREST = 700;
 const TOTAL = 5700;
 const INSTALLMENT = 570;
 
@@ -27,22 +25,18 @@ export function LoanSummary({ paidCount, totalCount }: LoanSummaryProps) {
         <div className="text-4xl">🤝</div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-6 text-center">
-        <div>
-          <p className="text-slate-500 text-xs uppercase tracking-wide">
-            Principal
-          </p>
-          <p className="text-white font-semibold">{formatCurrency(PRINCIPAL)}</p>
-        </div>
-        <div>
-          <p className="text-slate-500 text-xs uppercase tracking-wide">
-            Juros
-          </p>
-          <p className="text-amber-400 font-semibold">{formatCurrency(INTEREST)}</p>
-        </div>
+      <div className="grid grid-cols-2 gap-4 mb-6 text-center">
         <div>
           <p className="text-slate-500 text-xs uppercase tracking-wide">Total</p>
           <p className="text-emerald-400 font-semibold">{formatCurrency(TOTAL)}</p>
+        </div>
+        <div>
+          <p className="text-slate-500 text-xs uppercase tracking-wide">
+            Parcelas
+          </p>
+          <p className="text-white font-semibold">
+            {totalCount}× {formatCurrency(INSTALLMENT)}
+          </p>
         </div>
       </div>
 
