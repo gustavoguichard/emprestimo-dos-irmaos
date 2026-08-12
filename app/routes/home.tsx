@@ -37,11 +37,23 @@ export async function action({ request }: Route.ActionArgs) {
 
   if (intent === "validate-pin") {
     const pin = formData.get("pin");
-    const isValid = pin === process.env.PIN_CODE;
-    return { intent: "validate-pin", success: isValid };
+    const level =
+      pin === process.env.PIN_CODE
+        ? "write"
+        : pin === process.env.PIN_CODE_READONLY
+          ? "read"
+          : null;
+    return { intent: "validate-pin", success: level !== null, level };
   }
 
   if (intent === "toggle-payment") {
+    if (formData.get("pin") !== process.env.PIN_CODE) {
+      return data(
+        { intent: "toggle-payment", error: "Sem permissão para alterar pagamentos" },
+        { status: 403 }
+      );
+    }
+
     const id = formData.get("id") as string;
     const paid = formData.get("paid") === "true";
 
@@ -64,33 +76,45 @@ export async function action({ request }: Route.ActionArgs) {
   return { error: "Ação inválida" };
 }
 
+type PermissionLevel = "read" | "write";
+
 type ActionData = {
   intent?: string;
   success?: boolean;
   paid?: boolean;
   error?: string;
+  level?: PermissionLevel | null;
 };
 
 export default function Home() {
   const { payments } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<ActionData>();
   const revalidator = useRevalidator();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [permission, setPermission] = useState<PermissionLevel | null>(null);
   const [celebration, setCelebration] = useState<"payment" | "complete" | null>(null);
   const pinResolverRef = useRef<((value: boolean) => void) | null>(null);
+  const submittedPinRef = useRef<string | null>(null);
+  const validatedRef = useRef<{ pin: string; level: PermissionLevel } | null>(null);
+  const pinRef = useRef<string | null>(null);
   const pendingCelebrationRef = useRef<{ isFinal: boolean } | null>(null);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem("authenticated");
-    if (stored === "true") {
-      setIsAuthenticated(true);
+    const pin = sessionStorage.getItem("pin");
+    const level = sessionStorage.getItem("permission");
+    if (pin && (level === "read" || level === "write")) {
+      pinRef.current = pin;
+      setPermission(level);
     }
   }, []);
 
   useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data) {
       if (fetcher.data.intent === "validate-pin" && pinResolverRef.current) {
-        pinResolverRef.current(fetcher.data.success ?? false);
+        const { success, level } = fetcher.data;
+        if (success && level && submittedPinRef.current) {
+          validatedRef.current = { pin: submittedPinRef.current, level };
+        }
+        pinResolverRef.current(success ?? false);
         pinResolverRef.current = null;
       }
       if (fetcher.data.intent === "toggle-payment" && fetcher.data.success) {
@@ -107,6 +131,7 @@ export default function Home() {
     (pin: string): Promise<boolean> => {
       return new Promise((resolve) => {
         pinResolverRef.current = resolve;
+        submittedPinRef.current = pin;
         const formData = new FormData();
         formData.set("intent", "validate-pin");
         formData.set("pin", pin);
@@ -117,8 +142,12 @@ export default function Home() {
   );
 
   const handlePinSuccess = useCallback(() => {
-    sessionStorage.setItem("authenticated", "true");
-    setIsAuthenticated(true);
+    const validated = validatedRef.current;
+    if (!validated) return;
+    sessionStorage.setItem("pin", validated.pin);
+    sessionStorage.setItem("permission", validated.level);
+    pinRef.current = validated.pin;
+    setPermission(validated.level);
   }, []);
 
   const handleTogglePayment = useCallback(
@@ -127,6 +156,7 @@ export default function Home() {
       formData.set("intent", "toggle-payment");
       formData.set("id", id);
       formData.set("paid", String(paid));
+      formData.set("pin", pinRef.current ?? "");
       fetcher.submit(formData, { method: "POST" });
     },
     [fetcher]
@@ -140,11 +170,13 @@ export default function Home() {
     setCelebration(null);
   }, []);
 
-  if (!isAuthenticated) {
+  if (!permission) {
     return <PinScreen onSuccess={handlePinSuccess} onValidate={handleValidatePin} />;
   }
 
   const paidCount = payments.filter((p) => p.paid).length;
+  const unpaidCount = payments.length - paidCount;
+  const readOnly = permission === "read";
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4 pb-8">
@@ -156,31 +188,25 @@ export default function Home() {
           <p className="text-slate-400 text-sm">
             Gigio pagando o Guga em 10x
           </p>
+          {readOnly && (
+            <p className="text-slate-500 text-xs mt-1">👁️ Somente leitura</p>
+          )}
         </header>
 
         <LoanSummary paidCount={paidCount} totalCount={payments.length} />
 
         <div className="mt-6 space-y-3">
           <h2 className="text-lg font-semibold text-white mb-3">Parcelas</h2>
-          {payments.map((payment, index) => {
-            const allPreviousPaid = payments
-              .slice(0, index)
-              .every((p) => p.paid);
-            const allNextUnpaid = payments
-              .slice(index + 1)
-              .every((p) => !p.paid);
-            return (
-              <PaymentCard
-                key={payment.id}
-                payment={payment}
-                onToggle={handleTogglePayment}
-                onCelebrate={handleCelebrate}
-                isLast={index === payments.length - 1}
-                allPaidBefore={allPreviousPaid}
-                allUnpaidAfter={allNextUnpaid}
-              />
-            );
-          })}
+          {payments.map((payment) => (
+            <PaymentCard
+              key={payment.id}
+              payment={payment}
+              onToggle={handleTogglePayment}
+              onCelebrate={handleCelebrate}
+              willComplete={unpaidCount === 1 && !payment.paid}
+              readOnly={readOnly}
+            />
+          ))}
         </div>
       </div>
 

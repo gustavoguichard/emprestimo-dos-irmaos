@@ -10,9 +10,8 @@ type PaymentCardProps = {
   payment: Payment;
   onToggle: (id: string, paid: boolean) => Promise<void>;
   onCelebrate: (isFinal: boolean) => void;
-  isLast: boolean;
-  allPaidBefore: boolean;
-  allUnpaidAfter: boolean;
+  willComplete: boolean;
+  readOnly: boolean;
 };
 
 const INSTALLMENT_AMOUNT = 570;
@@ -21,16 +20,13 @@ export function PaymentCard({
   payment,
   onToggle,
   onCelebrate,
-  isLast,
-  allPaidBefore,
-  allUnpaidAfter,
+  willComplete,
+  readOnly,
 }: PaymentCardProps) {
   const [isLoading, setIsLoading] = useState(false);
   const status = getPaymentStatus(payment);
 
-  const canPay = !payment.paid && allPaidBefore;
-  const canUnpay = payment.paid && allUnpaidAfter;
-  const isDisabled = isLoading || (!canPay && !canUnpay);
+  const isDisabled = isLoading || readOnly;
 
   const handleClick = async () => {
     if (isDisabled) return;
@@ -40,8 +36,7 @@ export function PaymentCard({
     await onToggle(payment.id, newPaidState);
 
     if (newPaidState) {
-      const isFinalPayment = isLast && allPaidBefore;
-      onCelebrate(isFinalPayment);
+      onCelebrate(willComplete);
     }
 
     setIsLoading(false);
@@ -59,7 +54,13 @@ export function PaymentCard({
               ? "bg-gradient-to-r from-red-500/20 to-orange-500/20 border-2 border-red-500/50"
               : "bg-slate-800/50 border-2 border-slate-700"
         }
-        ${isDisabled ? "opacity-50 cursor-not-allowed" : "hover:border-slate-500 active:scale-[0.98]"}`}
+        ${
+          isLoading
+            ? "opacity-50 cursor-not-allowed"
+            : readOnly
+              ? "cursor-default"
+              : "hover:border-slate-500 active:scale-[0.98]"
+        }`}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
